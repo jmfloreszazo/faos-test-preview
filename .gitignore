@@ -1,0 +1,36 @@
+# Azure Developer CLI / deployment state
+.azure/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Agent Optimizer generated output
+# (the deployed winning candidate cand_9cb87381... is kept on purpose as the
+#  example artifact referenced by the README; other generated candidates/runs
+#  and local optimizer output are ignored)
+**/.agent_configs/cand_*/
+!**/.agent_configs/cand_9cb87381fcdc44a7b41d43a986dad175/
+.optimizer/
+optimizer-output/
+*.optimizer.json
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

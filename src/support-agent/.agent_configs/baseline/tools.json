@@ -1,0 +1,21 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "lookup_policy",
+        "description": "Looks up the company's official policy for a given topic.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "description": "Topic to look up: returns, shipping or warranty."
+            }
+          },
+          "required": ["topic"]
+        }
+      }
+    }
+  ]
+}

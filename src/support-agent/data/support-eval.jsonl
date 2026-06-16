@@ -1,0 +1,8 @@
+{"query": "How many days do I have to return a product?", "ground_truth": "You have 30 days from purchase to return a product, with receipt and in its original packaging."}
+{"query": "How long does standard shipping take?", "ground_truth": "Standard shipping takes 3 to 5 business days."}
+{"query": "Does express shipping have an extra cost?", "ground_truth": "Yes, express shipping (24-48 h) costs an additional $9.99."}
+{"query": "What warranty do the products have?", "ground_truth": "All products include a 2-year warranty against manufacturing defects."}
+{"query": "I want to return something but I don't have the receipt, can I?", "ground_truth": "Returns require the receipt and the original packaging within 30 days."}
+{"query": "Do you ship internationally?", "ground_truth": "I don't have information about that topic; it's best to hand off to a human agent."}
+{"query": "My product broke after 6 months, is it covered?", "ground_truth": "Yes, the 2-year warranty covers manufacturing defects."}
+{"query": "How much does express shipping cost and how long does it take?", "ground_truth": "Express shipping takes 24-48 h and costs an additional $9.99."}

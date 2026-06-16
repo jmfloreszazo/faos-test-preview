@@ -1,0 +1,22 @@
+name: support-optimization
+agent:
+  name: support-agent
+  kind: hosted
+  version: "1"
+  model: gpt-4.1-mini
+  config: .agent_configs/baseline/metadata.yaml
+dataset_file: data/support-eval.jsonl
+evaluators:
+  - relevance
+  - task_adherence
+options:
+  eval_model: gpt-4.1-mini
+  # Model that drives the optimization. A deployment with one of these
+  # allowed names must exist in your Foundry project:
+  #   GPT-5, GPT-5.1, GPT-5.2, GPT-5.4, GPT-5.5, DeepSeek-V4-Pro, DeepSeek-V-3.2
+  optimization_model: GPT-5.1
+  max_iterations: 4
+  optimization_config:
+    # Candidate models the optimizer may try for the agent.
+    model:
+      - GPT-5.1

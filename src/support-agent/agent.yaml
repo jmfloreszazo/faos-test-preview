@@ -1,0 +1,18 @@
+kind: hosted
+name: support-agent
+description: Customer support agent that answers questions about returns, shipping and warranties by looking up the company policy, with a friendly and resolutive tone.
+protocols:
+    - protocol: responses
+      version: 1.0.0
+resources:
+    cpu: "1"
+    memory: 2Gi
+environment_variables:
+    - name: AZURE_AI_PROJECT_ENDPOINT
+      value: ${AZURE_AI_PROJECT_ENDPOINT}
+    - name: AZURE_AI_MODEL_DEPLOYMENT_NAME
+      value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+    - name: OPTIMIZATION_LOCAL_DIR
+      value: .agent_configs
+    - name: OPTIMIZATION_CANDIDATE_ID
+      value: cand_5f09c2f3feef48ec9813c392c8801f66

@@ -1,0 +1,6 @@
+agent-framework-core
+agent-framework-foundry
+agent-framework-foundry-hosting
+azure-ai-agentserver-optimization
+azure-identity
+mcp>=1.0.0
