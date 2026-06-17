@@ -136,6 +136,28 @@ resource optimizerDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   }
 }
 
+// --- Connect App Insights to the Foundry project (enables Traces tab) ------
+// The Foundry portal's Traces/Monitor tabs require an 'AppInsights' connection
+// on the project. The credential key must be the App Insights connection string.
+
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: aiProject
+  name: 'appinsights'
+  properties: {
+    category: 'AppInsights'
+    target: appInsights.id
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: {
+      key: appInsights.properties.ConnectionString
+    }
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: appInsights.id
+    }
+  }
+}
+
 output projectEndpoint string = 'https://${aiAccount.name}.services.ai.azure.com/api/projects/${aiProject.name}'
 output projectId string = aiProject.id
 output appInsightsConnectionString string = appInsights.properties.ConnectionString

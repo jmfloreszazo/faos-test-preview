@@ -27,6 +27,9 @@ Results:
 
 From 71% to 100% of cases passing without writing a single new line of code.
 
+![Foundry portal — Agent Optimizer results with the candidate ranking and best score](imgs/azf-05.jpg)
+*The same optimization run in the Foundry portal: the candidate ranking and the winning score, exactly what the CLI prints above.*
+
 ---
 
 ## Table of contents
@@ -155,6 +158,8 @@ The technical key: the agent reads its configuration with `load_config()`, from 
 > ⚠️ **Region:** use **East US 2** (`eastus2`). North Central US does **not** support Agent. Service in this preview, so keep the workload in `eastus2`.
 
 > ⚠️ **Container deployment is mandatory.** Agent Optimizer rejects ZIP / `code_configuration` deployments. The agent ships with a `Dockerfile` and the infra provisions an Azure Container. Registry; `azd` builds and pushes the image automatically.
+>
+> ℹ️ **ZIP deployment is not supported yet.** Today the hosted agent must be deployed as a container image. Support for **ZIP-deployed hosted agents** is on the roadmap and expected in an upcoming release; once available, the `Dockerfile` + Container Registry requirement will become optional.
 
 ## Step by step
 

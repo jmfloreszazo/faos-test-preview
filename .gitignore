@@ -34,3 +34,7 @@ optimizer-output/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Logs (may contain subscription IDs, resource names and endpoints)
+*.log
+azd-ai-agents-*.log
