@@ -13,16 +13,17 @@ Hosted Agents preview stack:
 
 import os
 
-from azure.monitor.opentelemetry import configure_azure_monitor
 from agent_framework import Agent, tool
 from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from azure.ai.agentserver.optimization import load_config
 
-# Enable Azure Monitor telemetry when the connection string is available.
-if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-    configure_azure_monitor()
+# Telemetry note: the Foundry Hosted Agents runtime configures Azure Monitor
+# automatically from the project's App Insights connection (the container logs
+# show "appinsights_configured=True"). Do NOT call configure_azure_monitor()
+# here — a second initialization double-instruments OpenTelemetry and crashes
+# the container on startup (session_creation_failed / HTTP 500).
 
 
 # --- Tools (function calling) ---------------------------------------------

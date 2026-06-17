@@ -45,6 +45,7 @@ From 71% to 100% of cases passing without writing a single new line of code.
   - [Step by step](#step-by-step)
   - [Quick command reference](#quick-command-reference)
   - [How the optimization works](#how-the-optimization-works)
+  - [Observability & telemetry](#observability--telemetry--what-you-can-see-and-why)
 - [Part 3 — Real output captures](#part-3--real-output-captures)
   - [1. Provision the infrastructure — `azd provision`](#1-provision-the-infrastructure--azd-provision)
   - [2. Deploy the agent — `azd deploy`](#2-deploy-the-agent--azd-deploy)
@@ -320,6 +321,77 @@ options:
 The other options round out the loop: `max_iterations: 4` lets the writer refine up to four rounds,
 and `optimization_config.model` lists the candidate models the optimizer is *allowed* to try for the
 agent (here we keep it simple and only allow `GPT-5.1`).
+
+## Observability & telemetry — what you can see and why
+
+Every invocation of the agent is fully traced end-to-end. The infrastructure provisions an
+**Application Insights** resource backed by a **Log Analytics** workspace
+([`infra/resources.bicep`](infra/resources.bicep)), and the Foundry project is wired to it through an
+`AppInsights` **project connection**. You don't write any telemetry code: the Foundry Hosted Agents
+runtime detects that connection and **auto-configures Azure Monitor / OpenTelemetry inside the
+container** (the startup logs confirm it with `appinsights_configured=True`).
+
+> ⚠️ **Do not call `configure_azure_monitor()` yourself.** Because the platform already initializes
+> OpenTelemetry, a second manual init double-instruments the runtime and **crashes the container on
+> startup** (`session_creation_failed` / HTTP 500). [`main.py`](src/support-agent/main.py) therefore
+> only configures the agent — telemetry is left to the platform. The single env var
+> `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true` in [`agent.yaml`](src/support-agent/agent.yaml) is
+> what enriches the traces with the model/tool spans below.
+
+### What is monitored
+
+| Signal | Where it lands | What it tells you |
+| --- | --- | --- |
+| **Requests** | `AppRequests` → `invoke_agent` | Each inbound call to the agent: latency, success/failure, request id. |
+| **Model calls** | `AppDependencies` → `chat gpt-4.1-mini` | Every call to the worker model — the actual LLM round-trips (and their timing). |
+| **Tool calls** | `AppDependencies` → `execute_tool lookup_policy` | When and how the agent uses your tools (here, the policy lookup). |
+| **Foundry storage** | `AppDependencies` → `.../storage/responses`, `.../storage/history/...` | Conversation persistence (the Responses protocol reading/writing history). |
+| **Identity** | `AppDependencies` → `GET /msi/token`, `GET /metadata/instance/compute` | Managed-identity token acquisition — useful to spot auth issues. |
+| **Detailed traces** | `AppTraces` | The full step-by-step log of every turn: user message, tool arguments, tool result, assistant reply, durations. |
+
+### Why it matters
+
+- **Debugging** — when an answer is wrong, `AppTraces` shows the exact tool arguments and the model's
+  reasoning steps, so you can see *why* it answered the way it did (e.g. the agent calling
+  `lookup_policy` and getting a "no info, hand off to human" result).
+- **Latency & cost** — `AppDependencies` separates model time from tool time from storage time, so
+  you know where the seconds (and the tokens) go before and after an optimization.
+- **Closing the loop with the optimizer** — the same evaluators that score candidates also benefit
+  from real traces: you can compare baseline vs. optimized behaviour with production evidence, not
+  guesses.
+
+### See it yourself
+
+In the **Foundry portal**, open your agent → **Tracing / Monitoring** tab to browse spans visually.
+The **Traces** tab lists every invocation with its duration, token usage and estimated cost:
+
+![Foundry portal — Traces tab listing agent invocations with duration, tokens and estimated cost](imgs/azf-06.jpg)
+
+Click any trace to open the **trajectory** — the full span tree of a single turn, showing the agent
+invocation, the model (`chat gpt-4.1-mini`) and tool (`execute_tool lookup_policy`) spans, the HTTP
+calls and the per-span metadata:
+
+![Foundry portal — trace trajectory with the invoke_agent, chat and execute_tool spans and span metadata](imgs/azf-07.jpg)
+
+Prefer KQL? Query the Log Analytics workspace directly:
+
+```kusto
+// Recent agent invocations (requests)
+AppRequests
+| where Name == "invoke_agent"
+| project TimeGenerated, DurationMs, Success, OperationId
+| order by TimeGenerated desc
+
+// Model and tool calls for a session
+AppDependencies
+| where Name startswith "chat " or Name startswith "execute_tool "
+| project TimeGenerated, Name, DurationMs, OperationId
+| order by TimeGenerated desc
+```
+
+> ℹ️ First data after a fresh deploy can take **2–5 minutes** to appear (Application Insights
+> ingestion), and the very first invocation on a new version may return a one-off cold-start error —
+> just retry.
 
 ---
 
