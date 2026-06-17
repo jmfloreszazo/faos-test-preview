@@ -3,4 +3,5 @@ agent-framework-foundry
 agent-framework-foundry-hosting
 azure-ai-agentserver-optimization
 azure-identity
+azure-monitor-opentelemetry
 mcp>=1.0.0

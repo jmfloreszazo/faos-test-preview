@@ -13,11 +13,16 @@ Hosted Agents preview stack:
 
 import os
 
+from azure.monitor.opentelemetry import configure_azure_monitor
 from agent_framework import Agent, tool
 from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
 from azure.ai.agentserver.optimization import load_config
+
+# Enable Azure Monitor telemetry when the connection string is available.
+if os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+    configure_azure_monitor()
 
 
 # --- Tools (function calling) ---------------------------------------------
