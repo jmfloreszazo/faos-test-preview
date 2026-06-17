@@ -46,6 +46,7 @@ From 71% to 100% of cases passing without writing a single new line of code.
   - [Quick command reference](#quick-command-reference)
   - [How the optimization works](#how-the-optimization-works)
   - [Observability & telemetry](#observability--telemetry--what-you-can-see-and-why)
+  - [Monitoring the optimization: tokens & cost](#monitoring-the-optimization-tokens--cost)
 - [Part 3 — Real output captures](#part-3--real-output-captures)
   - [1. Provision the infrastructure — `azd provision`](#1-provision-the-infrastructure--azd-provision)
   - [2. Deploy the agent — `azd deploy`](#2-deploy-the-agent--azd-deploy)
@@ -392,6 +393,95 @@ AppDependencies
 > ℹ️ First data after a fresh deploy can take **2–5 minutes** to appear (Application Insights
 > ingestion), and the very first invocation on a new version may return a one-off cold-start error —
 > just retry.
+
+## Monitoring the optimization: tokens & cost
+
+This one trips everyone up: **the optimization does NOT generate traces in Application Insights.**
+Runtime invocations flow through your hosted-agent **container** (which is instrumented), but
+`azd ai agent optimize` runs as a **Foundry-managed control-plane job** that never touches your
+container — so there are no `AppRequests` / `AppTraces` for it. The CLI
+(`azd ai agent optimize status`) reports status and scores, but **not token usage**.
+
+So how do you know how many tokens (and how much money) an optimization burned? The consumption *is*
+recorded — just in a different place: **Azure Monitor platform metrics on the AI Services account**,
+broken down per **model deployment**.
+
+| Metric | Meaning |
+| --- | --- |
+| `ProcessedPromptTokens` | Input (prompt) tokens |
+| `GeneratedTokens` | Output (completion) tokens |
+
+The trick that makes attribution exact: in this demo the **`gpt-5.1`** deployment is used **only by
+the optimizer** (the "writer" that rewrites instructions), while **`gpt-4.1-mini`** is the evaluator
+("judge") that scores the dataset. So every `gpt-5.1` token is 100% optimization.
+
+### Read the tokens directly (Azure CLI)
+
+```powershell
+$rid = "/subscriptions/<sub>/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-<token>"
+
+az monitor metrics list --resource $rid `
+  --metric "ProcessedPromptTokens" "GeneratedTokens" `
+  --start-time 2026-06-17T12:28:00Z --end-time 2026-06-17T12:45:00Z `
+  --interval PT1M --aggregation Total `
+  --filter "ModelDeploymentName eq '*'"
+```
+
+Real numbers from one optimization run (`opt_f9cb2bc7…`, best score 0.80):
+
+| Deployment | Role | Prompt | Generated | Est. cost (USD) |
+| --- | --- | ---: | ---: | ---: |
+| **gpt-5.1** | optimizer (writer) | 7,077 | 2,560 | ~**0.034** |
+| **gpt-4.1-mini** | evaluator (judge) | 173,507 | 10,608 | ~**0.086** |
+| | **Total** | | | **~0.12** |
+
+> The optimizer (the *expensive* model) actually burns **few** tokens; the bulk of the volume is the
+> cheap evaluator re-running the dataset. That's exactly the economics the optimizer is built around.
+
+### Tag the run in App Insights so you can do cost math with KQL
+
+Because the CLI doesn't expose token usage, this repo ships a small helper that reads the per-deployment
+metrics for a job window, computes an estimated cost, and writes a **tagged custom event**
+(`AgentOptimizationUsage`) into Application Insights — so the optimization usage lives **next to** your
+runtime telemetry and you can query both with KQL.
+
+[`scripts/push_optimization_usage.py`](scripts/push_optimization_usage.py):
+
+```powershell
+python scripts/push_optimization_usage.py `
+  --job-id opt_f9cb2bc7d00343e7a8fc9f7887f8473b `
+  --start  2026-06-17T12:28:00Z `
+  --end    2026-06-17T12:45:00Z `
+  --best-score 0.80
+```
+
+It emits one event per deployment with these dimensions: `job_id`, `deployment`, `role`,
+`purpose=optimization`, `prompt_tokens`, `generated_tokens`, `total_tokens`, `est_cost_usd`,
+`best_score`. Edit the `DEFAULT_PRICES` map (or pass your own) to match your contract.
+
+> 💡 Prefer not running a script? The same attribution works in **Cost Management → Cost analysis →
+> Group by: Meter**: the `gpt-5.1` meter line is your optimization cost. The script just lets you keep
+> tokens **and** an estimated cost **inside App Insights**, tagged per job.
+
+### Query it (KQL)
+
+```kusto
+// Optimization cost per job (numbers are stored as strings -> convert)
+AppEvents
+| where Name == "AgentOptimizationUsage"
+| extend job_id      = tostring(Properties.job_id),
+         deployment  = tostring(Properties.deployment),
+         role        = tostring(Properties.role),
+         total_tokens = toint(Properties.total_tokens),
+         est_cost_usd = toreal(Properties.est_cost_usd)
+| summarize tokens = sum(total_tokens), cost_usd = sum(est_cost_usd) by job_id, deployment, role
+| order by job_id, cost_usd desc
+
+// Just the optimizer's bill (gpt-5.1 = 100% optimization)
+AppEvents
+| where Name == "AgentOptimizationUsage" and tostring(Properties.role) == "optimizer"
+| summarize optimizer_cost_usd = sum(toreal(Properties.est_cost_usd)) by tostring(Properties.job_id)
+```
 
 ---
 
