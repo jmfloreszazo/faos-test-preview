@@ -16,5 +16,3 @@ environment_variables:
       value: .agent_configs
     - name: OPTIMIZATION_CANDIDATE_ID
       value: cand_5f09c2f3feef48ec9813c392c8801f66
-    - name: APPLICATIONINSIGHTS_CONNECTION_STRING
-      value: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
