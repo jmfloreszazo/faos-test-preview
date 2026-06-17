@@ -132,6 +132,8 @@ The technical key: the agent reads its configuration with `load_config()`, from 
 ├─ infra/
 │  ├─ main.bicep                     ← infrastructure (Foundry, model, ACR, App Insights)
 │  └─ main.parameters.json           ← deployment parameters
+├─ scripts/
+│  └─ push_optimization_usage.py     ← reads a job's token metrics → tags cost into App Insights
 └─ src/
    └─ support-agent/
       ├─ main.py                     ← agent code (hosted agent in Python)
@@ -449,6 +451,12 @@ runtime telemetry and you can query both with KQL.
 [`scripts/push_optimization_usage.py`](scripts/push_optimization_usage.py):
 
 ```powershell
+# One-time: install the script's dependencies (independent from the agent's requirements.txt)
+pip install azure-monitor-opentelemetry azure-monitor-events-extension
+
+# It also shells out to the Azure CLI for the token metrics, so make sure you are logged in:
+az login
+
 python scripts/push_optimization_usage.py `
   --job-id opt_f9cb2bc7d00343e7a8fc9f7887f8473b `
   --start  2026-06-17T12:28:00Z `
