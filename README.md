@@ -47,6 +47,7 @@ From 71% to 100% of cases passing without writing a single new line of code.
   - [How the optimization works](#how-the-optimization-works)
   - [Observability & telemetry](#observability--telemetry--what-you-can-see-and-why)
   - [Monitoring the optimization: tokens & cost](#monitoring-the-optimization-tokens--cost)
+  - [Is it worth it? Long-term ROI](#is-it-worth-it-long-term-roi)
 - [Part 3 — Real output captures](#part-3--real-output-captures)
   - [1. Provision the infrastructure — `azd provision`](#1-provision-the-infrastructure--azd-provision)
   - [2. Deploy the agent — `azd deploy`](#2-deploy-the-agent--azd-deploy)
@@ -466,22 +467,137 @@ It emits one event per deployment with these dimensions: `job_id`, `deployment`,
 ### Query it (KQL)
 
 ```kusto
-// Optimization cost per job (numbers are stored as strings -> convert)
+// Optimization tokens + cost per job (numbers are stored as strings -> convert)
 AppEvents
 | where Name == "AgentOptimizationUsage"
-| extend job_id      = tostring(Properties.job_id),
-         deployment  = tostring(Properties.deployment),
-         role        = tostring(Properties.role),
-         total_tokens = toint(Properties.total_tokens),
-         est_cost_usd = toreal(Properties.est_cost_usd)
-| summarize tokens = sum(total_tokens), cost_usd = sum(est_cost_usd) by job_id, deployment, role
-| order by job_id, cost_usd desc
+| extend job_id        = tostring(Properties.job_id),
+         deployment    = tostring(Properties.deployment),
+         role          = tostring(Properties.role),
+         input_tokens  = toint(Properties.prompt_tokens),     // REAL (Azure Monitor)
+         output_tokens = toint(Properties.generated_tokens),  // REAL (Azure Monitor)
+         est_cost_usd  = toreal(Properties.est_cost_usd)       // ESTIMATED (tokens × list price)
+| summarize input_tokens  = sum(input_tokens),
+            output_tokens = sum(output_tokens),
+            est_cost_usd  = sum(est_cost_usd)
+          by job_id, deployment, role
+| order by job_id, est_cost_usd desc
 
 // Just the optimizer's bill (gpt-5.1 = 100% optimization)
 AppEvents
 | where Name == "AgentOptimizationUsage" and tostring(Properties.role) == "optimizer"
-| summarize optimizer_cost_usd = sum(toreal(Properties.est_cost_usd)) by tostring(Properties.job_id)
+| summarize input_tokens       = sum(toint(Properties.prompt_tokens)),     // REAL
+            output_tokens      = sum(toint(Properties.generated_tokens)),  // REAL
+            optimizer_cost_usd = sum(toreal(Properties.est_cost_usd))       // ESTIMATED
+          by tostring(Properties.job_id)
 ```
+
+## Is it worth it? Long-term ROI
+
+The whole point of the previous section is this decision: **does paying for an optimization pay
+itself back?** With the real numbers we captured, the answer is an emphatic yes — and here is why,
+step by step, with the queries to prove it on your own data.
+
+### The principle: optimize once, run cheap forever
+
+The optimization is a **one-off cost**. It rewrites the *instructions* — it does **not** change the
+model the agent runs on. Production keeps running on the cheap **`gpt-4.1-mini`** before *and* after.
+So:
+
+- **Runtime cost per request does not increase** after optimizing (same model, ~same tokens).
+- **Quality goes up** (in the captured run, `0.77 → 0.84`) for **every future request**, for free.
+- The only thing you pay is the **one-time** optimization job: **~0.12 USD** (measured above).
+
+### The real comparison: optimize cheap vs. run expensive
+
+The naive way to raise quality is to just run production on a bigger model (`gpt-5.1`). That makes
+**every single request** more expensive — forever. Optimizing buys you most of that quality once and
+keeps the cheap model in production. Using public list prices (per 1M tokens) and a typical request
+of ~2,000 input + 300 output tokens:
+
+| | `gpt-4.1-mini` (optimized) | `gpt-5.1` (brute force) |
+| --- | ---: | ---: |
+| Input price / 1M | $0.40 | $1.25 |
+| Output price / 1M | $1.60 | $10.00 |
+| **Cost per request** (~2,000 in + 300 out) | **~$0.00128** | **~$0.0055** |
+| Cost per **100,000 requests/month** | **~$128** | **~$550** |
+| Extra cost per month | — | **+~$422 / month, forever** |
+
+> 🔑 Optimizing costs **~$0.12 once**. Brute-forcing quality with `gpt-5.1` in production costs
+> **~$422 more every month**. The optimization pays for itself after roughly **~30 requests** and
+> then saves money on every request after that.
+
+> ⚠️ The runtime prices and the tokens-per-request are **list-price assumptions** — edit them to your
+> contract. The **only measured number here is the optimization cost** (`~0.12 USD`, from Azure
+> Monitor metrics). Everything else is a transparent extrapolation so you can plug in your own rates.
+
+### Break-even, in one line
+
+$$
+\text{requests to break even} = \frac{\text{optimization cost (one-off)}}{\text{runtime saving per request}} = \frac{0.12}{0.00422} \approx 29
+$$
+
+After ~29 production requests, the optimization has already paid for itself versus the
+bigger-model alternative. A real support agent serves that in **seconds**.
+
+### Track the long-term cost (KQL)
+
+Because every optimization is tagged in App Insights, you can watch the **cumulative** training cost
+over time and compare it against your runtime — all in one place. Each query returns **input tokens**,
+**output tokens** and the estimated **cost** side by side:
+
+```kusto
+// Total optimization (training) tokens + spend over time, per job
+AppEvents
+| where Name == "AgentOptimizationUsage"
+| extend job_id        = tostring(Properties.job_id),
+         input_tokens  = toint(Properties.prompt_tokens),     // REAL (Azure Monitor)
+         output_tokens = toint(Properties.generated_tokens),  // REAL (Azure Monitor)
+         est_cost_usd  = toreal(Properties.est_cost_usd)       // ESTIMATED (tokens × list price)
+| summarize input_tokens  = sum(input_tokens),
+            output_tokens = sum(output_tokens),
+            est_cost_usd  = sum(est_cost_usd)
+          by job_id, bin(TimeGenerated, 1d)
+| order by TimeGenerated asc
+
+// Running total: tokens + spend on optimizing this agent so far
+AppEvents
+| where Name == "AgentOptimizationUsage"
+| summarize input_tokens       = sum(toint(Properties.prompt_tokens)),     // REAL
+            output_tokens      = sum(toint(Properties.generated_tokens)),  // REAL
+            total_training_usd = sum(toreal(Properties.est_cost_usd))       // ESTIMATED
+
+// Optimization tokens + spend split by role (writer vs. judge)
+AppEvents
+| where Name == "AgentOptimizationUsage"
+| summarize input_tokens  = sum(toint(Properties.prompt_tokens)),     // REAL
+            output_tokens = sum(toint(Properties.generated_tokens)),  // REAL
+            est_cost_usd  = sum(toreal(Properties.est_cost_usd))       // ESTIMATED
+          by role = tostring(Properties.role)
+```
+
+> 🔎 **Real vs. estimated — read this before quoting any number.** The **token counts are real**:
+> `prompt_tokens` / `generated_tokens` come straight from **Azure Monitor platform metrics**
+> (`ProcessedPromptTokens` / `GeneratedTokens`) on the AI Services account — that is exactly what the
+> service metered. The **`est_cost_usd` is a *list-price estimate***: the script multiplies those real
+> tokens by the **public list prices** in its `DEFAULT_PRICES` map. Those prices are **not invented** —
+> they are verified against the **[Azure Retail Prices API](https://prices.azure.com/api/retail/prices)**
+> for region `eastus2` (Global deployment): `gpt-5.1` = **$1.25 / $10.00** per 1M in/out, `gpt-4.1-mini`
+> = **$0.40 / $1.60** per 1M in/out. But list price is **not your invoiced amount** — it varies with:
+>
+> - **Negotiated / EA / MACC / CSP discounts** specific to your organization.
+> - **Region** — the same model is priced differently per region; re-query the API for yours.
+> - **Deployment type** — Global vs Data Zone vs Regional vs Batch each have their **own meter/price**.
+> - **Cached input** tokens are billed at a separate, lower rate (not modeled here).
+> - **Time** — prices change; each meter carries an `effectiveStartDate`.
+>
+> For the authoritative figure, cross-check in **Cost Management → Cost analysis** (group by *Meter*).
+> In short: **trust the tokens, treat the cost as a transparent list-price approximation** you can
+> re-price with your own rates (edit `DEFAULT_PRICES`).
+
+> 💡 Rule of thumb: as long as **cumulative optimization spend** stays far below the **monthly runtime
+> saving** of keeping the cheap model in production, optimizing is a clear win. With the numbers above,
+> you could run **thousands** of optimizations a year and still spend less than one month of the
+> brute-force alternative.
 
 ---
 

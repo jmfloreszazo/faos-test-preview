@@ -42,10 +42,47 @@ import sys
 from azure.monitor.opentelemetry import configure_azure_monitor
 from azure.monitor.events.extension import track_event
 
-# --- Per-1M-token prices (USD). EDIT to match your contract / region list price. --------
-# These are placeholders so the cost column is non-zero; override with --price-* flags.
+# --- Per-1M-token prices (USD) --------------------------------------------------------
+#
+# IMPORTANT — these are PUBLIC LIST PRICES, *not* your negotiated/effective price.
+#
+#   * Source of truth: Azure Retail Prices API
+#       https://prices.azure.com/api/retail/prices
+#       (serviceFamily = "AI + Machine Learning", armRegionName = "eastus2")
+#   * The values below were verified against that API for region "eastus2":
+#       gpt-5.1        -> meter "GPT 5.1 inp Gl 1M Tokens"  = $1.25 / 1M  (input)
+#                         meter "GPT 5.1 opt Gl 1M Tokens"  = $10.00 / 1M (output)
+#                         (cached input "GPT 5.1 cd inp Gl" = $0.125 / 1M) -- not used here
+#       gpt-4.1-mini   -> meter "gpt 4.1 mini Inp glbl Tokens" = $0.0004 / 1K = $0.40 / 1M
+#                         meter "gpt 4.1 mini Outp glbl Tokens"= $0.0016 / 1K = $1.60 / 1M
+#
+# These are LIST prices and therefore an APPROXIMATION of what an optimization run costs.
+# What your organization actually pays can differ substantially because of:
+#
+#   * Negotiated / EA / MACC / CSP discounts and private offers.
+#   * Region: the same model is priced differently per region (e.g. eastus2 vs swedencentral).
+#     The meters above are eastus2; re-query the API for your region.
+#   * Deployment type: Global ("Gl"/"glbl") vs Data Zone ("Dz"/"DZone") vs Regional ("regnl")
+#     vs Batch each have their OWN meter and price. This demo uses Global; adjust if you
+#     deploy Data Zone / Regional / Batch.
+#   * Cached input tokens are billed at a separate (lower) rate — not modeled here.
+#   * Prices change over time. Each meter has an "effectiveStartDate"; the figures above were
+#     current on 2026-06-17. Always re-check the Retail Prices API for the date of your run.
+#
+# Bottom line: trust the TOKEN COUNTS (they come from Azure Monitor and are real); treat the
+# COST as a transparent list-price estimate. For your authoritative, invoiced amount use
+# Cost Management -> Cost analysis (group by Meter). Override the prices below with the values
+# from the Retail Prices API for *your* region/deployment, or edit this map directly.
+#
+# Quick way to fetch the real list price for your region (PowerShell):
+#   $f="serviceFamily eq 'AI + Machine Learning' and armRegionName eq '<region>' " +
+#      "and contains(meterName,'GPT 5.1') and contains(meterName,'Tokens')"
+#   Invoke-RestMethod ("https://prices.azure.com/api/retail/prices?`$filter=" +
+#      [uri]::EscapeDataString($f)) | Select -Expand Items |
+#      Select meterName, retailPrice, unitOfMeasure, effectiveStartDate
+#
 DEFAULT_PRICES = {
-    # deployment-name: (input_per_1M, output_per_1M)
+    # deployment-name: (input_per_1M, output_per_1M)  -- USD, eastus2 Global list price
     "gpt-5.1": (1.25, 10.00),
     "gpt-4.1-mini": (0.40, 1.60),
 }
