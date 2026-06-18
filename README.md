@@ -176,6 +176,15 @@ azd extension install azure.ai.agents
 azd ai agent --help   # verify the installation
 ```
 
+> ⚠️ **Use 0.1.40-preview or later.** The public preview requires this version — older
+> (private-preview) builds can break the optimization experience. If you already have it installed,
+> upgrade first:
+>
+> ```bash
+> azd extension upgrade azure.ai.agents
+> azd extension list                       # confirm 0.1.40-preview or later
+> ```
+
 ### Step 2 — Authenticate
 
 ```bash
@@ -278,7 +287,12 @@ flowchart LR
 1. The **baseline** ([`.agent_configs/baseline/`](src/support-agent/.agent_configs/baseline/)) defines
    the starting point: instructions, model and tools.
 2. The **dataset** ([`support-eval.jsonl`](src/support-agent/data/support-eval.jsonl)) contains
-   test cases with the expected answer.
+   test cases with the expected answer. Each line is a JSON object with two fields: **`query`**
+   (the user's question) and **`ground_truth`** (the expected answer).
+
+   > ⚠️ **Breaking change since the private preview:** the dataset fields were renamed. If you reuse
+   > old `.jsonl` files, rename **`prompt` → `query`** and **`groundTruth` → `ground_truth`**, or the
+   > evaluation will fail. The dataset in this repo already uses the new names.
 3. The **evaluators** score each answer (relevance, task adherence, etc.).
 4. Agent Optimizer generates candidates, evaluates them against the dataset and **ranks** them.
 5. You deploy the highest-scoring candidate.
@@ -1022,8 +1036,9 @@ In one line: **the baseline trusted the model to "behave"; the optimized prompt 
 
 | Resource | Link |
 |----------|------|
-| Quickstart (15 min) | [aka.ms/ao/quickstart](https://aka.ms/ao/quickstart) |
-| Concepts and overview | [aka.ms/ao/docs](https://aka.ms/ao/docs) |
-| Customer support sample | [aka.ms/faos/samples](https://aka.ms/faos/samples) |
+| Quickstart (15 min) | [aka.ms/ao/quickstart](https://aka.ms/ao/quickstart) · [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/foundry/agents/quickstarts/quickstart-optimize-hosted-agent) |
+| Concepts and overview | [aka.ms/ao/docs](https://aka.ms/ao/docs) · [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-optimizer-overview) |
+| Customer support sample | [aka.ms/faos/samples](https://aka.ms/faos/samples) · [foundry-samples](https://github.com/microsoft-foundry/foundry-samples) |
 | Build 2026 announcement | [Agent Optimizer at Build 2026](https://devblogs.microsoft.com/foundry/agent-optimizer-build2026/) |
 | Video demo | [YouTube](https://www.youtube.com/watch?v=_8UKz197JuM) |
+| Questions / issues | [agentoptimizerteam@microsoft.com](mailto:agentoptimizerteam@microsoft.com) |
