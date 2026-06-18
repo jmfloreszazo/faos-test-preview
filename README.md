@@ -1,7 +1,7 @@
 # Optimize an AI agent in minutes with Foundry Agent Optimizer
 
 [![Foundry](https://img.shields.io/badge/Microsoft-Foundry-0078D4?logo=microsoftazure&logoColor=white)](https://ai.azure.com)
-[![Agent Optimizer](https://img.shields.io/badge/Agent_Optimizer-Private_Preview-8A2BE2)](https://aka.ms/ao/docs)
+[![Agent Optimizer](https://img.shields.io/badge/Agent_Optimizer-Preview-8A2BE2)](https://aka.ms/ao/docs)
 [![azd](https://img.shields.io/badge/azd-CLI-1f6feb)](https://aka.ms/azd)
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green)](../LICENSE)
@@ -152,7 +152,8 @@ The technical key: the agent reads its configuration with `load_config()`, from 
 
 ## Prerequisites
 
-- [ ] **Azure subscription allowlisted** for the Agent Optimizer private preview.
+- [ ] **Azure subscription** with access to the Agent Optimizer **public preview** (generally
+      available as preview since **2026-06-18** — no allowlist required).
 - [ ] [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) installed.
 - [ ] [azd CLI](https://aka.ms/azd) installed.
 - [ ] [Python 3.12+](https://www.python.org/downloads/).
