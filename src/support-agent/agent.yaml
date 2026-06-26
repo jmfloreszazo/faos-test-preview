@@ -17,4 +17,4 @@ environment_variables:
     - name: OPTIMIZATION_LOCAL_DIR
       value: .agent_configs
     - name: OPTIMIZATION_CANDIDATE_ID
-      value: cand_1465ed93e173446195e3b81bb2a399e5
+      value: cand_b7295a7d22c648f7bd457b0603fa6cf5
