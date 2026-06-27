@@ -1,0 +1,142 @@
+[
+  {
+    "dims": "ApiName,OperationName,Region,StreamType,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "NormalizedTimeBetweenTokens",
+    "unit": "MilliSeconds"
+  },
+  {
+    "dims": "ApiName,OperationName,Region,StreamType,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "NormalizedTimeToFirstToken",
+    "unit": "MilliSeconds"
+  },
+  {
+    "dims": "ApiName,OperationName,Region,StreamType,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "TokensPerSecond",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "InputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "OutputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "TotalTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "GeneratedImages",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion,ContextLength",
+    "metric": "cacheReadInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion,ContextLength",
+    "metric": "ephemeral5mInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,Region,ModelDeploymentName,ModelName,ModelVersion,ContextLength",
+    "metric": "ephemeral1hInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,OperationName,Region",
+    "metric": "TotalTokenCalls",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveAudioInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveAudioOutputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveTextInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveTextOutputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveCachedTextInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "VoiceLiveCachedAudioInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,ModelDeploymentName,FeatureName,UsageChannel,Region,ModelVersion",
+    "metric": "TokenTransaction",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,ModelDeploymentName,FeatureName,UsageChannel,Region,ModelVersion",
+    "metric": "ProcessedPromptTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ModelDeploymentName,ModelName,ModelVersion,Region",
+    "metric": "AudioInputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ModelDeploymentName,ModelName,ModelVersion,Region",
+    "metric": "AudioPromptTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,ModelDeploymentName,FeatureName,UsageChannel,Region,ModelVersion",
+    "metric": "GeneratedTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ModelDeploymentName,ModelName,ModelVersion,Region",
+    "metric": "AudioOutputTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "ModelDeploymentName,ModelName,ModelVersion,Region",
+    "metric": "AudioCompletionTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "ActiveTokens",
+    "unit": "Count"
+  },
+  {
+    "dims": "Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "AzureOpenAIContextTokensCacheMatchRate",
+    "unit": "Percent"
+  },
+  {
+    "dims": "Region,ModelDeploymentName,ModelName,ModelVersion",
+    "metric": "AzureOpenAITokenPerSecond",
+    "unit": "Count"
+  },
+  {
+    "dims": "ApiName,FeatureName,UsageChannel,Region",
+    "metric": "Tokens",
+    "unit": "Count"
+  }
+]

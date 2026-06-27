@@ -1,0 +1,35 @@
+{
+  "cost": 1438,
+  "interval": "PT1H",
+  "namespace": "Microsoft.CognitiveServices/accounts",
+  "resourceregion": "eastus2",
+  "timespan": "2026-06-26T21:07:16Z/2026-06-27T09:07:16Z",
+  "value": [
+    {
+      "displayDescription": "Number of prompt tokens processed (input) on an OpenAI model. Applies to PTU, PTU-managed and Pay-as-you-go deployments. To breakdown this metric, you can add a filter or apply splitting by the following dimensions: ModelDeploymentName and ModelName.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/ProcessedPromptTokens",
+      "name": {
+        "localizedValue": "Processed Prompt Tokens",
+        "value": "ProcessedPromptTokens"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    },
+    {
+      "displayDescription": "Number of tokens generated (output) from an OpenAI model. Applies to PTU, PTU-managed and Pay-as-you-go deployments. To breakdown this metric, you can add a filter or apply splitting by the following dimensions: ModelDeploymentName and ModelName.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/GeneratedTokens",
+      "name": {
+        "localizedValue": "Generated Completion Tokens",
+        "value": "GeneratedTokens"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "cost": 2157,
+  "interval": "PT12H",
+  "namespace": "Microsoft.CognitiveServices/accounts",
+  "resourceregion": "eastus2",
+  "timespan": "2026-06-26T21:06:35Z/2026-06-27T09:06:35Z",
+  "value": [
+    {
+      "displayDescription": "Number of prompt tokens processed (input) on a model. Applies to PTU, PTU-Managed and Pay-as-you-go deployments.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/InputTokens",
+      "name": {
+        "localizedValue": "Input Tokens",
+        "value": "InputTokens"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    },
+    {
+      "displayDescription": "Number of tokens generated (output) from an OpenAI model. Applies to PTU, PTU-Managed and Pay-as-you-go deployments.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/OutputTokens",
+      "name": {
+        "localizedValue": "Output Tokens",
+        "value": "OutputTokens"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    },
+    {
+      "displayDescription": "Number of inference tokens processed on a model. Calculated as prompt tokens (input) plus generated tokens (output). Applies to PTU, PTU-Managed and Pay-as-you-go deployments.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/TotalTokens",
+      "name": {
+        "localizedValue": "Total Tokens",
+        "value": "TotalTokens"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    }
+  ]
+}

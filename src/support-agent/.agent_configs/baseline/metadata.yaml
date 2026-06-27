@@ -1,2 +1,2 @@
-model: support-sft-ft
+model: gpt-4o
 instruction_file: instructions.md

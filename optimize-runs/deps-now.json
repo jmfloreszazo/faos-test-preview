@@ -1,0 +1,16 @@
+[
+  {
+    "cap": 50,
+    "model": "gpt-4o",
+    "name": "gpt-4o",
+    "state": "Succeeded",
+    "ver": "2024-11-20"
+  },
+  {
+    "cap": 50,
+    "model": "gpt-5.1",
+    "name": "gpt-5.1",
+    "state": "Succeeded",
+    "ver": "2025-11-13"
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Could not obtain the account information.",
+    "type": "invalid_request_error",
+    "param": null,
+    "code": null
+  }
+}
