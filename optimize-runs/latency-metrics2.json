@@ -1,0 +1,35 @@
+{
+  "cost": 12948,
+  "interval": "PT1H",
+  "namespace": "Microsoft.CognitiveServices/accounts",
+  "resourceregion": "eastus2",
+  "timespan": "2026-06-25T12:00:00Z/2026-06-26T23:59:59Z",
+  "value": [
+    {
+      "displayDescription": "Time it takes for first byte of response data to be received after request is made by model, normalized by token. Applies to PTU, PTU-managed, and Pay-as-you-go deployments. For non-streaming requests, this value is an estimate.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/NormalizedTimeToFirstToken",
+      "name": {
+        "localizedValue": "Normalized Time to First Byte",
+        "value": "NormalizedTimeToFirstToken"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "MilliSeconds"
+    },
+    {
+      "displayDescription": "Enumerates the generation speed for a given model response. The total tokens generated is divided by the time to generate the tokens, in seconds. Applies to PTU and PTU-managed deployments. For non-streaming requests, this value is an estimate.",
+      "errorCode": "Success",
+      "id": "/subscriptions/7a84bc78-1d1e-4294-a7c4-760dc607b5de/resourceGroups/rg-support-demo-en/providers/Microsoft.CognitiveServices/accounts/aisvc-yrwwwokfuruzy/providers/Microsoft.Insights/metrics/TokensPerSecond",
+      "name": {
+        "localizedValue": "Tokens Per Second",
+        "value": "TokensPerSecond"
+      },
+      "resourceGroup": "rg-support-demo-en",
+      "timeseries": [],
+      "type": "Microsoft.Insights/metrics",
+      "unit": "Count"
+    }
+  ]
+}

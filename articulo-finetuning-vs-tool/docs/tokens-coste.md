@@ -43,9 +43,9 @@ con tool, los tokens suman las **2 llamadas internas** (decidir tool + responder
 ## 2. Coste estimado (USD por 1.000 peticiones)
 
 Precios PAYG GlobalStandard (eastus2): Normal in **$2.50**/1M, out **$10.00**/1M ·
-Fine-tuned in **$3.75**/1M, out **$15.00**/1M. _Sólo tokens; el fine-tuned añade
-además una **tarifa horaria de hosting** del modelo afinado, no incluida aquí, que
-se paga **aunque no haya tráfico**._
+Fine-tuned in **$3.75**/1M, out **$15.00**/1M. _Esta tabla es **sólo tokens**; las
+cuotas fijas (hosting del fine-tuned y RAG de Azure AI Search) se analizan en los
+§4 y §5, que calculan el coste total (TCO)._
 
 | Escenario | Normal | Fine-tuned | Δ (FT − Normal) |
 |---|:--:|:--:|:--:|
@@ -79,27 +79,109 @@ correctas (rel ≥ 4) de los Tests 1/2/3 ([RESUMEN-final.md](RESUMEN-final.md)).
 - El fine-tuning **sólo gana en el escenario sin tool** (A): si por algún motivo
   no puedes añadir una tool/RAG, `gpt-4o-ft` es la vía más barata a buena calidad.
 
----
-
-## 4. Proyección de coste mensual (sólo tokens)
-
-Coste de tokens según volumen, para las cuatro opciones con calidad aceptable:
-
-| Opción | 10k req/mes | 100k req/mes | 1M req/mes |
-|---|:--:|:--:|:--:|
-| A · FT (sin tool) | $10.9 | $109 | $1.092 |
-| **B · Normal (tool conciso)** | **$11.9** | **$119** | **$1.185** |
-| C · Normal (tool optimizado) | $18.4 | $184 | $1.835 |
-| C · FT (tool optimizado) | $30.9 | $309 | $3.092 |
-
-> ⚠️ Las filas de fine-tuned (`gpt-4o-ft`) suman además la **tarifa horaria de
-> hosting** del modelo afinado, constante e independiente del tráfico. A volumen
-> bajo/medio esa cuota fija suele **dominar** el coste y agranda aún más la
-> diferencia frente al modelo base.
+> ⚠️ **Matiz del Test 4 (prompt-stuffing).** Existe una **tercera estrategia de
+> conocimiento** además de "tool/RAG" y "fine-tuning": **incrustar el conocimiento
+> directamente en el system prompt**. Cuando optimizamos el prompt del modelo base
+> *sin tool* ([test4-llm-crudo-optimizado.md](test4-llm-crudo-optimizado.md)), el
+> optimizador metió las políticas reales (30 días, $9.99, garantía 2 años) dentro
+> del prompt y el `gpt-4o` base pasó de **0/8 → 8/8**. No "inventó" nada: el
+> conocimiento estaba *inline*. Funciona **sólo si el conocimiento es pequeño y
+> estable** (cabe en el prompt y casi no cambia). Coste: +tokens de entrada en
+> *cada* petición, pero **cero infra fija** (ni hosting FT ni RAG). Si el
+> conocimiento es grande o cambia a menudo, esta vía no escala → vuelves a RAG.
 
 ---
 
-## 5. Detalle: tokens totales consumidos en la medición (8 preguntas)
+## 3.5. Latencia (lag) por arquitectura — medición wall-clock
+
+Las métricas de plataforma de latencia (`NormalizedTimeToFirstToken`,
+`TokensPerSecond`) **vuelven vacías** en esta cuenta porque las llamadas son
+no-streaming. Por eso medimos el **tiempo de pared real por petición** desde el
+cliente (lo que percibe el usuario), igual que hicimos con los tokens.
+
+| Escenario · Modelo | Llamadas | 1ª llamada (med, ms) | Total media (ms) | Total mediana (ms) |
+|---|:--:|:--:|:--:|:--:|
+| A · Normal (sin tool) | 1 | 1.440 | 1.542 | 1.440 |
+| A · Fine-tuned (sin tool) | 1 | 1.039 | 1.091 | **1.039** |
+| B · Normal (tool conciso) | 2 | 743 | 1.689 | 1.611 |
+| B · Fine-tuned (tool conciso) | 2 | 583 | 1.726 | 1.752 |
+| C · Normal (tool optimizado) | 2 | 509 | 1.487 | 1.606 |
+| C · Fine-tuned (tool optimizado) | 2 | 580 | 1.540 | 1.541 |
+
+**Lecturas clave de latencia:**
+- **El nº de llamadas es el factor estructural.** Sin tool = **1 round-trip**; con
+  tool/RAG = **2 round-trips secuenciales** (decidir tool → recibir resultado →
+  responder). La `1ª llamada` de los escenarios con tool (≈500-740 ms) es sólo el
+  *lag* de decidir la tool: el usuario **aún no tiene respuesta** hasta completar
+  la 2ª llamada.
+- **El fine-tuned sin tool es el más rápido (≈1.039 ms)**: 1 sola llamada y
+  respuestas más cortas. Es el único punto donde el FT gana claramente al base.
+- **En producción el tool/RAG es aún más lento de lo que se ve aquí**: nuestra
+  `lookup_policy` es un diccionario local (~0 ms). Un **Azure AI Search real añade
+  la latencia de recuperación** (típicamente +50-300 ms, más si usas semantic
+  ranker o agentic retrieval) **encima** de las 2 llamadas al modelo.
+- **Resumen de lag:** `1 llamada (FT sin tool / prompt-stuffing)` < `2 llamadas
+  (tool, dict local)` < `2 llamadas + recuperación (RAG real)`.
+
+> 💡 **La latencia equilibra la decisión.** Por calidad+coste gana B·Normal
+> (base+RAG), pero si tu requisito es **latencia mínima** y el conocimiento es
+> pequeño/estable, una sola llamada (FT sin tool, o el prompt-stuffing del Test 4)
+> evita el segundo round-trip y la recuperación del RAG.
+
+---
+
+## 4. Coste de infraestructura FIJA — el RAG cuesta dinero, pero el FT cuesta mucho más
+
+El escenario "con tool" no es gratis: en producción ese conocimiento sale de un
+**RAG real (Azure AI Search)**, que tiene una **cuota fija mensual** independiente
+del tráfico. Pero el fine-tuned también arrastra una cuota fija: el **hosting del
+deployment afinado**. Comparando las dos cuotas fijas (precios públicos, eastus2):
+
+| Componente fijo | Para qué arquitectura | Coste fijo / mes |
+|---|---|:--:|
+| Azure AI Search **Basic** (15 GB, 15 índices) | RAG (B·Normal, C·Normal) | **$73.73** |
+| Azure AI Search **Standard S1** (prod, SLA) | RAG (alternativa con SLA) | $245.28 |
+| **Hosting fine-tuned** ($1.70/h × 730 h) | FT desplegado (A·FT, B·FT, C·FT) | **≈ $1.241** |
+| Embeddings de consulta (`text-embedding-3-small`, $0.022/1M) | RAG | ≈ $0.7 @ 100k consultas (despreciable) |
+| Semantic ranker (opcional) | RAG | 1k/mes gratis, luego $1 / 1k consultas |
+
+> 💡 **El RAG cuesta dinero, sí — pero la cuota fija del fine-tuned (~$1.241/mes)
+> es ~17× la de un Azure AI Search Basic (~$73.73/mes).** Incluso con S1 de
+> producción ($245/mes), el RAG sigue siendo ~5× más barato en coste fijo.
+> _(El tier **Developer** de fine-tuning no cobra hosting, pero no tiene SLA y el
+> deployment puede eliminarse: válido para dev/pruebas, no para producción.)_
+
+---
+
+## 5. Coste total mensual (TCO = fijo + tokens) por volumen
+
+Sumando la cuota fija de infraestructura (RAG Basic $73.73 / hosting FT $1.241) y
+el coste variable de tokens (§2):
+
+| Arquitectura | Fijo/mes | 10k req/mes | 100k req/mes | 1M req/mes |
+|---|:--:|:--:|:--:|:--:|
+| A · FT sin RAG | $1.241 | $1.252 | $1.350 | $2.333 |
+| **B · Normal + RAG (tool conciso)** | **$73.73** | **$85.6** | **$192.2** | **$1.258,7** |
+| C · Normal + RAG (tool optimizado) | $73.73 | $92.1 | $257.2 | $1.908,7 |
+| C · FT + RAG (lo peor de ambos) | $1.314,7 | $1.345,6 | $1.623,9 | $4.406,7 |
+
+- **`gpt-4o` base + RAG (B·Normal) es el más barato en TODOS los volúmenes**, no
+  sólo en tokens: arranca en ~$86/mes a 10k req y sólo iguala al FT-sin-RAG cerca
+  de **1M req/mes** (y aún ahí gana: $1.259 vs $2.333).
+- El fine-tuned **sin RAG** (A·FT) parecía la salida "barata si no puedes usar
+  RAG", pero su **hosting fijo de ~$1.241/mes lo hace caro** desde la primera
+  petición: a 10k req cuesta **~15×** más que B·Normal.
+- Combinar FT **y** RAG (C·FT) acumula las dos cuotas fijas: la opción más cara.
+
+**Conclusión reforzada:** aunque el RAG no es gratis, su coste fijo es pequeño
+frente al hosting del modelo afinado. La arquitectura **base + RAG + prompt
+conciso (B·Normal)** gana en calidad (8/8) **y** en coste total a cualquier escala.
+El fine-tuning sólo tendría sentido económico sin RAG, a volumen muy alto y
+usando el tier Developer (sin SLA) — un nicho muy estrecho.
+
+---
+
+## 6. Detalle: tokens totales consumidos en la medición (8 preguntas)
 
 | Escenario | Modelo | In total | Out total |
 |---|---|:--:|:--:|

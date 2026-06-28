@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import statistics
+import time
 from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -150,23 +151,30 @@ def make_client(endpoint: str, token: str, api_version: str):
 
 
 def run_direct(client, deployment: str, system: str, question: str) -> dict:
+    t0 = time.perf_counter()
     r = client.chat.completions.create(
         model=deployment,
         messages=[{"role": "system", "content": system},
                   {"role": "user", "content": question}],
         temperature=0.2, max_tokens=250,
     )
-    return {"in": r.usage.prompt_tokens, "out": r.usage.completion_tokens}
+    dt = (time.perf_counter() - t0) * 1000.0
+    return {"in": r.usage.prompt_tokens, "out": r.usage.completion_tokens,
+            "lat_total": dt, "lat_first": dt, "calls": 1}
 
 
 def run_tool(client, deployment: str, system: str, question: str) -> dict:
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": question}]
     p = c = 0
+    t0 = time.perf_counter()
     r1 = client.chat.completions.create(
         model=deployment, messages=messages, tools=TOOLS,
         tool_choice="auto", temperature=0.2, max_tokens=250,
     )
+    lat_first = (time.perf_counter() - t0) * 1000.0
+    lat_total = lat_first
+    calls = 1
     p += r1.usage.prompt_tokens
     c += r1.usage.completion_tokens
     msg = r1.choices[0].message
@@ -185,13 +193,17 @@ def run_tool(client, deployment: str, system: str, question: str) -> dict:
                 topic = ""
             messages.append({"role": "tool", "tool_call_id": tc.id,
                              "content": lookup_policy(topic)})
+        t1 = time.perf_counter()
         r2 = client.chat.completions.create(
             model=deployment, messages=messages, tools=TOOLS,
             tool_choice="auto", temperature=0.2, max_tokens=250,
         )
+        lat_total += (time.perf_counter() - t1) * 1000.0
+        calls = 2
         p += r2.usage.prompt_tokens
         c += r2.usage.completion_tokens
-    return {"in": p, "out": c}
+    return {"in": p, "out": c, "lat_total": lat_total, "lat_first": lat_first,
+            "calls": calls}
 
 
 def mean(xs) -> float:
@@ -206,11 +218,16 @@ def aggregate(samples: list[dict]) -> dict:
     ins = [s["in"] for s in samples]
     outs = [s["out"] for s in samples]
     tots = [s["in"] + s["out"] for s in samples]
+    lat = [s["lat_total"] for s in samples]
+    latf = [s["lat_first"] for s in samples]
     return {
         "in_mean": mean(ins), "in_median": median(ins),
         "out_mean": mean(outs), "out_median": median(outs),
         "tot_mean": mean(tots), "tot_median": median(tots),
         "in_sum": sum(ins), "out_sum": sum(outs),
+        "lat_mean": round(statistics.mean(lat)), "lat_median": round(statistics.median(lat)),
+        "latf_mean": round(statistics.mean(latf)), "latf_median": round(statistics.median(latf)),
+        "calls": samples[0].get("calls", 1) if samples else 1,
     }
 
 
@@ -290,6 +307,26 @@ def write_markdown(args, scenarios, data) -> None:
             lines.append(
                 f"| {key}. {label} | `{dep}` | {a['in_mean']} | {a['in_median']} | "
                 f"{a['out_mean']} | {a['out_median']} | {a['tot_mean']} |")
+    lines += [
+        "",
+        "## Latencia por petición (wall-clock, ms)",
+        "",
+        "Medida extremo a extremo desde el cliente (lo que percibe el usuario). Las "
+        "métricas de plataforma (`NormalizedTimeToFirstToken`, `TokensPerSecond`) "
+        "vuelven vacías en esta cuenta porque las llamadas son no-streaming, así que "
+        "medimos el tiempo de pared real por petición. En los escenarios con tool, "
+        "**`1ª llamada`** es el tiempo hasta decidir la tool (el *lag* del primer "
+        "turno) y **`total`** suma las 2 llamadas (decidir tool + responder).",
+        "",
+        "| Escenario | Modelo | Llamadas | 1ª llamada (med) | Total media | Total mediana |",
+        "|---|---|:--:|:--:|:--:|:--:|",
+    ]
+    for key, label, _kind, _sys in scenarios:
+        for side, dep in (("normal", args.normal), ("ft", args.ft)):
+            a = data[(key, side)]
+            lines.append(
+                f"| {key}. {label} | `{dep}` | {a['calls']} | {a['latf_median']} | "
+                f"{a['lat_mean']} | {a['lat_median']} |")
     lines += [
         "",
         "## Coste estimado (USD por 1000 peticiones)",

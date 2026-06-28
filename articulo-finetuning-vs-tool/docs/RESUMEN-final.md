@@ -69,6 +69,27 @@ rápidamente la diferencia entre normal y fine-tuned.
 
 ---
 
+## Test 4 — Optimización SIN tool ([test4-llm-crudo-optimizado.md](docs/test4-llm-crudo-optimizado.md))
+
+La cuarta combinación que faltaba: optimizar el prompt **sin** tool, para ver si
+se puede *rescatar* al modelo base sin acceso a la información.
+
+| Modelo | Combinada base | Combinada opt | Δ | Correctas base → opt |
+|---|:--:|:--:|:--:|:--:|
+| Normal (`gpt-4o`) | 2.13 | 5.00 | +2.88 | **0/8 → 8/8** |
+| Fine-tuned (`gpt-4o-ft`) | 3.75 | 4.50 | +0.75 | 5/8 → 7/8 |
+
+**Conclusión (matiz importante):** el base pasó de 0/8 a 8/8 **no porque
+"aprendiera"**, sino porque el optimizador (`gpt-5.1`), al ver las respuestas de
+referencia, **incrustó las políticas reales dentro del system prompt** (30 días,
+$9.99, garantía 2 años). Es una **tercera estrategia de conocimiento**:
+*prompt-stuffing* estático. Funciona **sólo si el conocimiento es pequeño y
+estable** (cabe en el prompt y casi no cambia); su coste es +tokens de entrada en
+cada petición, pero **cero infra fija** (ni hosting FT ni RAG). El fine-tuned, que
+ya lleva las políticas en sus pesos, sólo mejoró de estilo (5/8 → 7/8).
+
+---
+
 ## Coste — tokens de entrada/salida ([tokens-coste.md](tokens-coste.md))
 
 Tokens exactos del campo `usage` de la API (lo mismo que registra App Insights),
@@ -96,8 +117,27 @@ medidos por petición en cada arquitectura. El coste lo domina la **entrada**
 ```
 Sin tool   (Test 1):  fine-tuning IMPRESCINDIBLE   (2.56 → 4.44, +73%)
 Con tool   (Test 2):  fine-tuning aporta poco/resta (normal 8/8 vs FT 6/8)
-Optimizado (Test 3):  ambos llegan al techo         (5.0 / 8-8)
+Optimizado (Test 3):  ambos llegan al techo CON tool(5.0 / 8-8)
+Sin tool+opt(Test 4): el optimizador incrusta la política -> base 0/8 → 8/8
 ```
+
+### Latencia (lag) — el nº de llamadas manda
+
+Las métricas de plataforma (`NormalizedTimeToFirstToken`, `TokensPerSecond`)
+vuelven vacías con llamadas no-streaming, así que medimos el **tiempo de pared**
+por petición:
+
+| Escenario | Llamadas | Total mediana |
+|---|:--:|:--:|
+| Sin tool (FT) | 1 | **1.039 ms** |
+| Sin tool (Normal) | 1 | 1.440 ms |
+| Con tool (Normal) | 2 | 1.611 ms |
+| Con tool (FT) | 2 | 1.752 ms |
+
+Sin tool = **1 round-trip**; con tool/RAG = **2 round-trips secuenciales + la
+latencia de recuperación** del índice real (la demo usa un diccionario local). La
+latencia es el argumento que inclina la balanza hacia 1 sola llamada cuando el
+conocimiento es pequeño/estable.
 
 - **El conocimiento no se puede "promptear" si no está disponible.** Sin la tool,
   el modelo normal nunca acierta por mucho que mejores el prompt; el fine-tuning
@@ -106,14 +146,24 @@ Optimizado (Test 3):  ambos llegan al techo         (5.0 / 8-8)
   añade coste (tokens, latencia) y un estilo más verboso sin mejorar la exactitud.
 - **La optimización de prompt es barata y muy efectiva** cuando el modelo tiene
   acceso a la información correcta: lleva a ambos al máximo en una iteración.
+- **El RAG no es gratis, pero es barato comparado con el FT:** un Azure AI Search
+  Basic cuesta ~$73.73/mes fijos, frente a ~$1.241/mes del hosting del modelo
+  afinado (~17×). Aun con S1 de producción ($245/mes) el RAG sale ~5× más barato.
 
 **Recomendación:** para este caso de soporte con políticas que cambian, la
-arquitectura ganadora es **modelo base `gpt-4o` + tool `lookup_policy` con prompt
-conciso (escenario B)**: 8/8 de exactitud al **menor coste** de todas las opciones
-de máxima calidad ($1.185/1k), sin tarifa de hosting y sin re-entrenar cuando
-cambia una política. El prompt "optimizado" (C) no añade exactitud sobre el
-conciso y sólo encarece; el fine-tuned sólo merece la pena si **no** puedes usar
-tool/RAG (escenario A).
+arquitectura ganadora es **modelo base `gpt-4o` + tool/RAG `lookup_policy` con
+prompt conciso (escenario B)**: 8/8 de exactitud al **menor coste total** de todas
+las opciones de máxima calidad. Incluyendo la cuota fija del RAG (Azure AI Search
+Basic ~$73.73/mes), sigue siendo más barata que el fine-tuned a cualquier volumen
+(ver §4-5 de [tokens-coste.md](tokens-coste.md)), porque el hosting del FT
+(~$1.241/mes) pesa ~17× más. El prompt "optimizado" (C) no añade exactitud sobre
+el conciso y sólo encarece; el fine-tuned sólo tendría sentido sin RAG, a volumen
+muy alto y en tier Developer (sin SLA): un nicho económico muy estrecho.
+
+> 🌳 **¿Qué estrategia elijo?** Ver el **árbol de decisión** (calidad + coste +
+> latencia) en el [README](../README.md#árbol-de-decisión-qué-estrategia-elijo).
+> Regla rápida: *KB grande o viva* → **RAG (B·Normal)**; *KB pequeña y estable +
+> latencia crítica* → **prompt-stuffing (Test 4)**; *fine-tuning* casi nunca.
 
 ---
 
@@ -124,7 +174,8 @@ tool/RAG (escenario A).
 | 1 — LLM crudo | [scripts/compare_models.py](scripts/compare_models.py) |
 | 2 — Agente + tool | [scripts/compare_agents_tool.py](scripts/compare_agents_tool.py) |
 | 3 — Optimización | [scripts/optimize_compare.py](scripts/optimize_compare.py) |
-| Tokens/coste | [scripts/token_report.py](scripts/token_report.py) |
+| 4 — Optimización sin tool | [scripts/optimize_compare.py](scripts/optimize_compare.py) `--no-tool` |
+| Tokens/coste/latencia | [scripts/token_report.py](scripts/token_report.py) |
 
 Auth común (PowerShell):
 

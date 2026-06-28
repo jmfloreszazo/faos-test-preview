@@ -96,6 +96,24 @@ OPTIMIZER_SYSTEM = (
     "Respond ONLY with compact JSON: {\"system_prompt\": \"<the new prompt>\"}."
 )
 
+# Optimizer for the NO-TOOL variant (Test 4): the agent has no tool and no
+# external knowledge, so the optimizer can only improve honesty/style/format.
+OPTIMIZER_SYSTEM_NOTOOL = (
+    "You are a prompt optimizer for a customer-support agent. The agent answers "
+    "questions about returns, shipping and warranties. It has NO tools and NO "
+    "external knowledge source: it must answer from its own model knowledge only. "
+    "You are given the agent's CURRENT system prompt and a report of how it "
+    "performed on a set of questions (each with the ground truth, the agent's "
+    "answer, and judge scores for relevance and task_adherence on a 1-5 scale).\n\n"
+    "Rewrite the system prompt to maximize relevance and task_adherence. The ideal "
+    "agent: replies in English, is clear and concise (no padding), answers ONLY "
+    "what was asked, and when it does not know a policy it must say so explicitly "
+    "and offer to hand off to a human agent INSTEAD of inventing details. You "
+    "cannot give the agent information it does not have; you can only improve "
+    "honesty, style and formatting. Keep the prompt short and instructional.\n\n"
+    "Respond ONLY with compact JSON: {\"system_prompt\": \"<the new prompt>\"}."
+)
+
 
 def lookup_policy(topic: str) -> str:
     return POLICIES.get((topic or "").lower().strip(), POLICY_FALLBACK)
@@ -117,8 +135,10 @@ def make_client(endpoint: str, token: str, api_version: str):
                        api_version=api_version)
 
 
-def run_agent(client, deployment: str, system_prompt: str, question: str) -> dict:
-    """Run the tool-enabled agent flow with a given system prompt."""
+def run_agent(client, deployment: str, system_prompt: str, question: str,
+              use_tool: bool = True) -> dict:
+    """Run the agent flow with a given system prompt. If ``use_tool`` is False the
+    agent answers in a single call with no tools (Test 4: LLM crudo optimizado)."""
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question},
@@ -126,17 +146,18 @@ def run_agent(client, deployment: str, system_prompt: str, question: str) -> dic
     p_tok = c_tok = 0
     tool_called = False
     topics: list[str] = []
+    extra = {"tools": TOOLS, "tool_choice": "auto"} if use_tool else {}
 
     r1 = client.chat.completions.create(
-        model=deployment, messages=messages, tools=TOOLS,
-        tool_choice="auto", temperature=0.2, max_tokens=250,
+        model=deployment, messages=messages, temperature=0.2, max_tokens=250,
+        **extra,
     )
     p_tok += r1.usage.prompt_tokens
     c_tok += r1.usage.completion_tokens
     msg = r1.choices[0].message
     answer = (msg.content or "").strip()
 
-    if msg.tool_calls:
+    if use_tool and msg.tool_calls:
         tool_called = True
         messages.append({
             "role": "assistant", "content": msg.content,
@@ -191,11 +212,13 @@ def judge(client, deployment: str, question: str, ground_truth: str, answer: str
     return data
 
 
-def optimizer_complete(client, deployment: str, report: str) -> str:
+def optimizer_complete(client, deployment: str, report: str,
+                       use_tool: bool = True) -> str:
     """Ask the optimizer model for a new system prompt. Robust to gpt-5.x param
     differences (no temperature, max_completion_tokens)."""
     messages = [
-        {"role": "system", "content": OPTIMIZER_SYSTEM},
+        {"role": "system",
+         "content": OPTIMIZER_SYSTEM if use_tool else OPTIMIZER_SYSTEM_NOTOOL},
         {"role": "user", "content": report},
     ]
     kwargs_variants = [
@@ -225,12 +248,12 @@ def avg(nums) -> float:
 
 
 def evaluate(client, deployment: str, judge_dep: str, system_prompt: str,
-             rows: list[dict]) -> dict:
+             rows: list[dict], use_tool: bool = True) -> dict:
     """Run the agent + judge over the eval set; return per-question + aggregates."""
     per = []
     for row in rows:
         q, gt = row["query"], row["ground_truth"]
-        out = run_agent(client, deployment, system_prompt, q)
+        out = run_agent(client, deployment, system_prompt, q, use_tool=use_tool)
         j = judge(client, judge_dep, q, gt, out["answer"])
         per.append({"q": q, "gt": gt, **out, **j})
     rel = [p["relevance"] for p in per]
@@ -262,9 +285,10 @@ def build_report(ev: dict) -> str:
 
 
 def optimize_model(client, deployment: str, judge_dep: str, optimizer_dep: str,
-                   rows: list[dict], iterations: int, label: str) -> dict:
-    print(f"\n=== Optimizing {label} ({deployment}) ===")
-    baseline = evaluate(client, deployment, judge_dep, WEAK_SYSTEM, rows)
+                   rows: list[dict], iterations: int, label: str,
+                   use_tool: bool = True) -> dict:
+    print(f"\n=== Optimizing {label} ({deployment}) use_tool={use_tool} ===")
+    baseline = evaluate(client, deployment, judge_dep, WEAK_SYSTEM, rows, use_tool)
     print(f"  baseline: combined={baseline['combined']} rel={baseline['relevance']} "
           f"adh={baseline['adherence']} pass={baseline['passed']}/{baseline['n']} "
           f"tool={baseline['tool']}/{baseline['n']}")
@@ -274,11 +298,11 @@ def optimize_model(client, deployment: str, judge_dep: str, optimizer_dep: str,
     for it in range(1, iterations + 1):
         report = build_report(best)
         try:
-            candidate_prompt = optimizer_complete(client, optimizer_dep, report)
+            candidate_prompt = optimizer_complete(client, optimizer_dep, report, use_tool)
         except Exception as exc:  # noqa: BLE001
             print(f"  iter {it}: optimizer error -> {exc}; stopping.")
             break
-        ev = evaluate(client, deployment, judge_dep, candidate_prompt, rows)
+        ev = evaluate(client, deployment, judge_dep, candidate_prompt, rows, use_tool)
         improved = ev["combined"] > best["combined"]
         print(f"  iter {it}: combined={ev['combined']} rel={ev['relevance']} "
               f"adh={ev['adherence']} pass={ev['passed']}/{ev['n']} "
@@ -299,6 +323,8 @@ def main() -> None:
     ap.add_argument("--optimizer", default="gpt-5.1")
     ap.add_argument("--iterations", type=int, default=3)
     ap.add_argument("--api-version", default="2024-10-21")
+    ap.add_argument("--no-tool", action="store_true",
+                    help="Test 4: optimize WITHOUT the lookup_policy tool (LLM crudo).")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "test3-optimizacion.md"))
     args = ap.parse_args()
 
@@ -311,12 +337,13 @@ def main() -> None:
     rows = load_eval(EVAL)
     print(f"Loaded {len(rows)} eval questions.")
 
+    use_tool = not args.no_tool
     normal = optimize_model(client, args.normal, args.judge, args.optimizer,
-                            rows, args.iterations, "Normal")
+                            rows, args.iterations, "Normal", use_tool)
     ft = optimize_model(client, args.ft, args.judge, args.optimizer,
-                        rows, args.iterations, "Fine-tuned")
+                        rows, args.iterations, "Fine-tuned", use_tool)
 
-    write_markdown(args, normal, ft)
+    write_markdown(args, normal, ft, use_tool)
     print(f"\nWrote {args.out}")
 
 
@@ -332,20 +359,32 @@ def _evo_table(res: dict) -> list[str]:
     return lines
 
 
-def write_markdown(args, normal: dict, ft: dict) -> None:
+def write_markdown(args, normal: dict, ft: dict, use_tool: bool = True) -> None:
     def delta(res: dict, key: str) -> str:
         d = round(res["best"][key] - res["baseline"][key], 3)
         return f"{d:+}"
 
     n = normal["baseline"]["n"]
+    title = ("# Test 3 - Optimizacion del mismo agente: normal vs fine-tuned"
+             if use_tool else
+             "# Test 4 - Optimizacion SIN tool (LLM crudo): normal vs fine-tuned")
+    mode_note = (
+        "**Modo con herramienta:** el agente dispone de `lookup_policy`."
+        if use_tool else
+        "**Modo SIN herramienta:** el agente responde unicamente con el conocimiento "
+        "del propio modelo; no existe `lookup_policy`. Asi aislamos si optimizar el "
+        "prompt puede *rescatar* a un modelo sin acceso a la informacion (no puede "
+        "inventar lo que no sabe).")
     lines = [
-        "# Test 3 - Optimizacion del mismo agente: normal vs fine-tuned",
+        title,
         "",
         f"_Generado: {datetime.now():%Y-%m-%d %H:%M}_ - dataset: {n} preguntas "
         "([data/support-eval.jsonl](src/support-agent/data/support-eval.jsonl)).",
         "",
         f"Optimizador: `{args.optimizer}` · Juez: `{args.judge}` · "
         f"Iteraciones: {args.iterations}.",
+        "",
+        mode_note,
         "",
         "Ambos agentes parten del **mismo prompt debil** y se optimizan con el "
         "mismo modelo optimizador y el mismo dataset. El optimizador reescribe el "
